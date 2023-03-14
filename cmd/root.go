@@ -31,45 +31,52 @@ import (
 const domainSuffix = "border0.io"
 
 var (
-	version                string
-	date                   string
-	email                  string
-	mfaCode                string
-	name                   string
-	description            string
-	socketType             string
-	password               string
-	port                   int
-	hostname               string
-	orgID                  string
-	socketID               string
-	tunnelID               string
-	policyName             string
-	policyDescription      string
-	policyFile             string
-	identityFile           string //deprecated
-	cloudauth_addresses    string
-	cloudauth_domains      string
-	proxyHost              string
-	upstream_username      string
-	upstream_password      string
-	upstream_http_hostname string
-	upstream_type          string
-	httpserver             bool
-	httpserver_dir         string
-	localssh               bool
-	orgName                string
-	sso                    string
-	connectorConfig        string
-	perPage                int64
-	page                   int64
-	orgwide                bool
-	runcommand             string
-	connectorAuthEnabled   bool
-	orgCustomDomain        string
-	upstream_cert_file     string
-	upstream_key_file      string
-	upstream_ca_file       string
+	version                 string
+	date                    string
+	email                   string
+	mfaCode                 string
+	name                    string
+	description             string
+	socketType              string
+	password                string
+	port                    int
+	hostname                string
+	orgID                   string
+	socketID                string
+	tunnelID                string
+	policyName              string
+	policyDescription       string
+	policyFile              string
+	identityFile            string //deprecated
+	cloudauth_addresses     string
+	cloudauth_domains       string
+	proxyHost               string
+	upstream_username       string
+	upstream_password       string
+	upstream_http_hostname  string
+	upstream_type           string
+	httpserver              bool
+	httpserver_dir          string
+	localssh                bool
+	orgName                 string
+	sso                     string
+	connectorConfig         string
+	perPage                 int64
+	page                    int64
+	orgwide                 bool
+	runcommand              string
+	connectorAuthEnabled    bool
+	orgCustomDomain         string
+	upstream_cert_file      string
+	upstream_key_file       string
+	upstream_ca_file        string
+	cloudSqlCredentialsFile string
+	cloudSqlInstance        string
+	cloudSqlIAM             bool
+	cloudSqlConnector       bool
+	rdsIAM                  bool
+	awsRegion               string
+	upstream_tls            bool
 )
 
 // rootCmd represents the base command when called without any subcommands

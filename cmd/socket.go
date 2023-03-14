@@ -27,7 +27,9 @@ import (
 	"github.com/borderzero/border0-cli/internal/api"
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/border0"
+	"github.com/borderzero/border0-cli/internal/cloudsql"
 	"github.com/borderzero/border0-cli/internal/http"
+	"github.com/borderzero/border0-cli/internal/sqlauthproxy"
 	"github.com/borderzero/border0-cli/internal/ssh"
 	"github.com/borderzero/border0-cli/internal/util"
 	"github.com/jedib0t/go-pretty/table"
@@ -310,12 +312,48 @@ var socketConnectCmd = &cobra.Command{
 
 		SetRlimit()
 
-		if socketType != "http" && httpserver {
+		if socket.SocketType != "http" && httpserver {
 			httpserver = false
 		}
 
 		if socket.SocketType != "ssh" && localssh {
 			localssh = false
+		}
+
+		if socket.SocketType == "database" && cloudSqlConnector {
+			if cloudSqlInstance == "" {
+				return fmt.Errorf("error: no cloudsql instance provided")
+			}
+		}
+
+		if socket.SocketType == "database" && rdsIAM {
+			if awsRegion == "" {
+				return fmt.Errorf("error: no AWS region provided")
+			}
+		}
+
+		var sqlAuthProxy bool
+		var handlerConfig sqlauthproxy.Config
+		if socket.SocketType == "database" && (upstream_username != "" || upstream_password != "" || rdsIAM || upstream_cert_file != "" || upstream_key_file != "") {
+			handlerConfig = sqlauthproxy.Config{
+				Hostname:         hostname,
+				Port:             port,
+				RdsIam:           rdsIAM,
+				Username:         upstream_username,
+				Password:         upstream_password,
+				UpstreamType:     socket.UpstreamType,
+				AwsRegion:        awsRegion,
+				UpstreamCAFile:   upstream_ca_file,
+				UpstreamCertFile: upstream_cert_file,
+				UpstreamKeyFile:  upstream_key_file,
+				UpstreamTLS:      upstream_tls,
+			}
+
+			sqlAuthProxy = true
+		}
+
+		if socket.SocketType != "database" && cloudSqlConnector {
+			cloudSqlConnector = false
 		}
 
 		l, err := socket.Listen()
@@ -327,15 +365,30 @@ var socketConnectCmd = &cobra.Command{
 
 		switch {
 		case httpserver:
-			http.StartLocalHTTPServer(httpserver_dir, l)
+			if err := http.StartLocalHTTPServer(httpserver_dir, l); err != nil {
+				return err
+			}
+
 		case localssh:
 			sshServer := ssh.NewServer(socket.Organization.Certificates["ssh_public_key"])
-			sshServer.Serve(l)
+			if err := sshServer.Serve(l); err != nil {
+				return err
+			}
+		case cloudSqlConnector:
+			if err := cloudsql.Serve(l, cloudSqlInstance, cloudSqlCredentialsFile, cloudSqlIAM); err != nil {
+				return err
+			}
+		case sqlAuthProxy:
+			if err := sqlauthproxy.Serve(l, handlerConfig); err != nil {
+				return err
+			}
 		default:
 			if port < 1 {
 				return fmt.Errorf("error: port not specified")
 			}
-			border0.Serve(l, hostname, port)
+			if err := border0.Serve(l, hostname, port); err != nil {
+				return err
+			}
 		}
 
 		return nil
@@ -478,6 +531,18 @@ func init() {
 	socketConnectCmd.Flags().MarkDeprecated("localssh", "use --sshserver instead")
 	socketConnectCmd.Flags().BoolVarP(&httpserver, "httpserver", "", false, "Start a local http server to accept http connections on this host")
 	socketConnectCmd.Flags().StringVarP(&httpserver_dir, "httpserver_dir", "", "", "Directory to serve http connections on this host")
+	socketConnectCmd.Flags().StringVarP(&cloudSqlCredentialsFile, "cloudsql-credentials-file", "", "", "Use service account key file as a source of IAM credentials")
+	socketConnectCmd.Flags().StringVarP(&cloudSqlInstance, "cloudsql-instance", "", "", "Google Cloud SQL instance")
+	socketConnectCmd.Flags().BoolVarP(&cloudSqlIAM, "cloudsql-with-iam", "", false, "Use automatic IAM authentication for Google Cloud SQL instance")
+	socketConnectCmd.Flags().BoolVarP(&cloudSqlConnector, "cloudsql-connector", "", false, "Use Google Cloud SQL connector")
+	socketConnectCmd.Flags().BoolVarP(&rdsIAM, "rds-with-iam", "", false, "Use IAM authentication for AWS RDS instance")
+	socketConnectCmd.Flags().StringVarP(&awsRegion, "aws-region", "", "", "AWS region for RDS instance")
+	socketConnectCmd.Flags().StringVarP(&upstream_username, "upstream_username", "", "", "Upstream username")
+	socketConnectCmd.Flags().StringVarP(&upstream_password, "upstream_password", "", "", "Upstream password")
+	socketConnectCmd.Flags().StringVarP(&upstream_cert_file, "upstream_certificate_filename", "f", "", "path to file from where to read the upstream client certificate")
+	socketConnectCmd.Flags().StringVarP(&upstream_key_file, "upstream_key_filename", "y", "", "path to file from where to read the upstream client key")
+	socketConnectCmd.Flags().StringVarP(&upstream_ca_file, "upstream_ca_filename", "a", "", "path to file from where to read the upstream ca certificate")
+	socketConnectCmd.Flags().BoolVarP(&upstream_tls, "upstream_tls", "", true, "Use TLS for upstream connection")
 
 	socketConnectCmd.RegisterFlagCompletionFunc("socket_id", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return getSockets(toComplete), cobra.ShellCompDirectiveNoFileComp

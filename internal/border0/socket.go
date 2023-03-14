@@ -45,6 +45,7 @@ const (
 type Socket struct {
 	SocketID                         string
 	SocketType                       string
+	UpstreamType                     string
 	ConnectorAuthenticationEnabled   bool
 	ConnectorAuthenticationTLSConfig *tls.Config
 	border0API                       api.API
@@ -80,6 +81,7 @@ func NewSocket(ctx context.Context, border0API api.API, nameOrID string) (*Socke
 	return &Socket{
 		SocketID:                       socketFromApi.SocketID,
 		SocketType:                     socketFromApi.SocketType,
+		UpstreamType:                   socketFromApi.UpstreamType,
 		ConnectorAuthenticationEnabled: socketFromApi.ConnectorAuthenticationEnabled,
 		border0API:                     border0API,
 		tunnelHost:                     getTunnelHost(),
@@ -527,7 +529,7 @@ func (s *Socket) generateConnectorAuthenticationTLSConfig() (*tls.Config, error)
 	}, nil
 }
 
-func proxyConnection(client net.Conn, remote net.Conn) {
+func ProxyConnection(client net.Conn, remote net.Conn) {
 	defer client.Close()
 	defer remote.Close()
 
@@ -557,10 +559,11 @@ func Serve(l net.Listener, hostname string, port int) error {
 			lconn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", hostname, port), 5*time.Second)
 			if err != nil {
 				log.Printf("failed to connect to local service: %s", err)
+				rconn.Close()
 				return
 			}
 
-			go proxyConnection(rconn, lconn)
+			go ProxyConnection(rconn, lconn)
 		}()
 	}
 }
