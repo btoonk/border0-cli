@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -13,8 +14,10 @@ import (
 	"github.com/borderzero/border0-cli/internal/api"
 	"github.com/borderzero/border0-cli/internal/api/models"
 	"github.com/borderzero/border0-cli/internal/border0"
+	"github.com/borderzero/border0-cli/internal/cloudsql"
 	"github.com/borderzero/border0-cli/internal/connector/config"
 	"github.com/borderzero/border0-cli/internal/connector/discover"
+	"github.com/borderzero/border0-cli/internal/sqlauthproxy"
 	"github.com/borderzero/border0-cli/internal/ssh"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -88,6 +91,8 @@ func (c *ConnectorCore) TunnelConnnect(ctx context.Context, socket models.Socket
 	if err != nil {
 		return err
 	}
+	socketFromApi.ConnectorLocalData = socket.ConnectorLocalData
+
 	socket = *socketFromApi
 	socket.BuildConnectorDataByTags()
 
@@ -97,7 +102,57 @@ func (c *ConnectorCore) TunnelConnnect(ctx context.Context, socket models.Socket
 		return err
 	}
 
-	border0.Serve(l, socket.ConnectorData.TargetHostname, socket.ConnectorData.Port)
+	var sqlAuthProxy bool
+	var handlerConfig sqlauthproxy.Config
+	if socket.SocketType == "database" {
+		upstreamTLS := true
+		if socket.ConnectorLocalData.UpstreamTLS != nil {
+			upstreamTLS = *socket.ConnectorLocalData.UpstreamTLS
+		}
+
+		handlerConfig = sqlauthproxy.Config{
+			Hostname:         socket.ConnectorData.TargetHostname,
+			Port:             socket.ConnectorData.Port,
+			RdsIam:           socket.ConnectorLocalData.RdsIAMAuth,
+			Username:         socket.ConnectorLocalData.UpstreamUsername,
+			Password:         socket.ConnectorLocalData.UpstreamPassword,
+			UpstreamType:     socket.UpstreamType,
+			AwsRegion:        socket.ConnectorLocalData.AWSRegion,
+			UpstreamCAFile:   socket.ConnectorLocalData.UpstreamCACertFile,
+			UpstreamCertFile: socket.ConnectorLocalData.UpstreamCertFile,
+			UpstreamKeyFile:  socket.ConnectorLocalData.UpstreamKeyFile,
+			UpstreamTLS:      upstreamTLS,
+		}
+
+		if socket.ConnectorLocalData.CloudSQLConnector {
+			if socket.ConnectorLocalData.CloudSQLInstance == "" {
+				return fmt.Errorf("cloudsql instance is not defined")
+			}
+
+			ctx := context.Background()
+			dialer, err := cloudsql.NewDialer(ctx, socket.ConnectorLocalData.CloudSQLInstance, socket.ConnectorLocalData.GoogleCredentialsFile, socket.ConnectorLocalData.CloudSQLIAMAuth)
+			if err != nil {
+				return fmt.Errorf("failed to create dialer for cloudSQL: %s", err)
+			}
+
+			handlerConfig.DialerFunc = func(ctx context.Context, _, _ string) (net.Conn, error) {
+				return dialer.Dial(ctx, socket.ConnectorLocalData.CloudSQLInstance)
+			}
+		}
+
+		sqlAuthProxy = true
+	}
+
+	switch {
+	case sqlAuthProxy:
+		if err := sqlauthproxy.Serve(l, handlerConfig); err != nil {
+			return err
+		}
+	default:
+		if err := border0.Serve(l, socket.ConnectorData.TargetHostname, socket.ConnectorData.Port); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
@@ -281,14 +336,12 @@ func (c *ConnectorCore) CheckAndUpdateSocket(ctx context.Context, apiSocket, loc
 	}
 
 	if !check || apiSocket.UpstreamHttpHostname != localSocket.UpstreamHttpHostname ||
-		apiSocket.UpstreamUsername != localSocket.UpstreamUsername ||
 		apiSocket.UpstreamType != localSocket.UpstreamType ||
 		apiSocket.ConnectorAuthenticationEnabled != localSocket.ConnectorAuthenticationEnabled {
 
 		apiSocket.AllowedEmailAddresses = localSocket.AllowedEmailAddresses
 		apiSocket.AllowedEmailDomains = localSocket.AllowedEmailDomains
 		apiSocket.UpstreamHttpHostname = localSocket.UpstreamHttpHostname
-		apiSocket.UpstreamUsername = localSocket.UpstreamUsername
 		apiSocket.ConnectorAuthenticationEnabled = localSocket.ConnectorAuthenticationEnabled
 		apiSocket.UpstreamType = ""
 		apiSocket.CloudAuthEnabled = true
@@ -387,6 +440,7 @@ func (c *ConnectorCore) CheckSocketsToCreate(ctx context.Context, localSockets [
 
 			createdSocket.PluginName = c.discovery.Name()
 			createdSocket.BuildConnectorData(c.cfg.Connector.Name, c.metadata.Principal)
+			createdSocket.ConnectorLocalData = localSocket.ConnectorLocalData
 
 			socketsToConnect = append(socketsToConnect, *createdSocket)
 		} else {
@@ -395,6 +449,8 @@ func (c *ConnectorCore) CheckSocketsToCreate(ctx context.Context, localSockets [
 				c.logger.Info("error updating the socket", zap.String("error", err.Error()))
 				return nil, err
 			}
+
+			updatedSocket.ConnectorLocalData = localSocket.ConnectorLocalData
 
 			socketsToConnect = append(socketsToConnect, *updatedSocket)
 		}
@@ -406,6 +462,13 @@ func (c *ConnectorCore) CreateSocket(ctx context.Context, s *models.Socket) (*mo
 	if s.Description == "" {
 		s.Description = fmt.Sprintf("created by %s", c.cfg.Connector.Name)
 	}
+
+	//remove sensitive data
+	s.UpstreamUsername = ""
+	s.UpstreamPassword = ""
+	s.UpstreamCert = nil
+	s.UpstreamKey = nil
+	s.UpstreamCa = nil
 
 	createdSocket, err := c.border0API.CreateSocket(ctx, s)
 	if err != nil {

@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"regexp"
 	"strconv"
@@ -349,6 +350,18 @@ var socketConnectCmd = &cobra.Command{
 				UpstreamTLS:      upstream_tls,
 			}
 
+			if cloudSqlConnector {
+				ctx := context.Background()
+				dialer, err := cloudsql.NewDialer(ctx, cloudSqlInstance, cloudSqlCredentialsFile, cloudSqlIAM)
+				if err != nil {
+					return fmt.Errorf("failed to create dialer for cloudSQL: %s", err)
+				}
+
+				handlerConfig.DialerFunc = func(ctx context.Context, _, _ string) (net.Conn, error) {
+					return dialer.Dial(ctx, cloudSqlInstance)
+				}
+			}
+
 			sqlAuthProxy = true
 		}
 
@@ -374,12 +387,12 @@ var socketConnectCmd = &cobra.Command{
 			if err := sshServer.Serve(l); err != nil {
 				return err
 			}
-		case cloudSqlConnector:
-			if err := cloudsql.Serve(l, cloudSqlInstance, cloudSqlCredentialsFile, cloudSqlIAM); err != nil {
-				return err
-			}
 		case sqlAuthProxy:
 			if err := sqlauthproxy.Serve(l, handlerConfig); err != nil {
+				return err
+			}
+		case cloudSqlConnector:
+			if err := cloudsql.Serve(l, cloudSqlInstance, cloudSqlCredentialsFile, cloudSqlIAM); err != nil {
 				return err
 			}
 		default:

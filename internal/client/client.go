@@ -473,7 +473,6 @@ func GetCert(token string, email string) *CertificateResponse {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 401 {
-		fmt.Printf("req: %+v\n", req)
 		log.Fatalln("Error: No valid token, Please login")
 	}
 

@@ -35,7 +35,7 @@ func newPostgresHandler(c Config) (*postgresHandler, error) {
 	}
 
 	var sslSettings []string
-	if c.UpstreamTLS {
+	if c.UpstreamTLS && c.DialerFunc == nil {
 		if c.UpstreamCAFile != "" {
 			sslSettings = append(sslSettings, fmt.Sprintf("sslrootcert=%s", c.UpstreamCAFile))
 			sslSettings = append(sslSettings, "sslmode=verify-ca")
@@ -63,6 +63,10 @@ func newPostgresHandler(c Config) (*postgresHandler, error) {
 	config, err := pgconn.ParseConfig(dsn)
 	if err != nil {
 		return nil, err
+	}
+
+	if c.DialerFunc != nil {
+		config.DialFunc = c.DialerFunc
 	}
 
 	return &postgresHandler{

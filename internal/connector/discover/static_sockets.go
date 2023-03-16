@@ -30,16 +30,28 @@ func (s *StaticSocketFinder) Find(ctx context.Context, cfg config.Config, state 
 			socket.AllowedEmailAddresses = v.AllowedEmailAddresses
 			socket.AllowedEmailDomains = v.AllowedEmailDomains
 			socket.SocketType = v.Type
-			socket.UpstreamUsername = v.UpstreamUser
-			socket.UpstreamPassword = v.UpstreamPassword
 			socket.TargetHostname = v.Host
 			socket.TargetPort = v.Port
 			socket.ConnectorAuthenticationEnabled = v.ConnectorAuthenticationEnabled
 			socket.UpstreamHttpHostname = v.UpstreamHttpHostname
 			socket.CloudAuthEnabled = true
 			socket.PolicyNames = v.Policies
-
 			socket.UpstreamType = v.UpstreamType
+
+			socket.ConnectorLocalData = &models.ConnectorLocalData{
+				UpstreamUsername:      v.UpstreamUser,
+				UpstreamPassword:      v.UpstreamPassword,
+				UpstreamCertFile:      v.UpstreamCertFile,
+				UpstreamKeyFile:       v.UpstreamKeyFile,
+				UpstreamCACertFile:    v.UpstreamCACertFile,
+				UpstreamTLS:           v.UpstreamTLS,
+				RdsIAMAuth:            v.RdsIAMAuth,
+				AWSRegion:             v.AWSRegion,
+				CloudSQLConnector:     v.CloudSQLConnector,
+				CloudSQLIAMAuth:       v.CloudSQLIAMAuth,
+				CloudSQLInstance:      v.CloudSQLInstance,
+				GoogleCredentialsFile: v.GoogleCredentialsFile,
+			}
 		}
 
 		sockets = append(sockets, socket)

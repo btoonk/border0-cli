@@ -1,6 +1,7 @@
 package sqlauthproxy
 
 import (
+	"context"
 	"fmt"
 	"net"
 )
@@ -21,6 +22,7 @@ type Config struct {
 	UpstreamKeyFile  string
 	UpstreamTLS      bool
 	AwsRegion        string
+	DialerFunc       func(context.Context, string, string) (net.Conn, error)
 }
 
 func Serve(l net.Listener, config Config) error {

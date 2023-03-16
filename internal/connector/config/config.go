@@ -33,6 +33,17 @@ type SocketConfig struct {
 	UpstreamHttpHostname           string   `mapstructure:"upstream_http_hostname"`
 	ConnectorAuthenticationEnabled bool     `mapstructure:"connector_authentication"`
 	Policies                       []string `mapstructure:"policies"`
+
+	UpstreamCertFile      string `mapstructure:"upstream_certificate_file"`
+	UpstreamKeyFile       string `mapstructure:"upstream_key_file"`
+	UpstreamCACertFile    string `mapstructure:"upstream_ca_file"`
+	UpstreamTLS           *bool  `mapstructure:"upstream_tls,omitempty"`
+	RdsIAMAuth            bool   `mapstructure:"rds_iam_auth"`
+	AWSRegion             string `mapstructure:"aws_region"`
+	CloudSQLConnector     bool   `mapstructure:"cloudsql_connector"`
+	CloudSQLIAMAuth       bool   `mapstructure:"cloudsql_iam_auth"`
+	CloudSQLInstance      string `mapstructure:"cloudsql_instance"`
+	GoogleCredentialsFile string `mapstructure:"google_credentials_file"`
 }
 
 type Credentials struct {

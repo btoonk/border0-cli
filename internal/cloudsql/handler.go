@@ -11,17 +11,8 @@ import (
 )
 
 func Serve(l net.Listener, instanceName, credentialsFile string, withIAM bool) error {
-	var opts []cloudsqlconn.Option
-	if credentialsFile != "" {
-		opts = append(opts, cloudsqlconn.WithCredentialsFile(credentialsFile))
-	}
-
-	if withIAM {
-		opts = append(opts, cloudsqlconn.WithIAMAuthN())
-	}
-
 	ctx := context.Background()
-	dialer, err := cloudsqlconn.NewDialer(ctx, opts...)
+	dialer, err := NewDialer(ctx, instanceName, credentialsFile, withIAM)
 	if err != nil {
 		return fmt.Errorf("failed to create dialer for cloudSQL: %s", err)
 	}
@@ -42,4 +33,17 @@ func Serve(l net.Listener, instanceName, credentialsFile string, withIAM bool) e
 			border0.ProxyConnection(rconn, lconn)
 		}()
 	}
+}
+
+func NewDialer(ctx context.Context, instanceName, credentialsFile string, withIAM bool) (*cloudsqlconn.Dialer, error) {
+	var opts []cloudsqlconn.Option
+	if credentialsFile != "" {
+		opts = append(opts, cloudsqlconn.WithCredentialsFile(credentialsFile))
+	}
+
+	if withIAM {
+		opts = append(opts, cloudsqlconn.WithIAMAuthN())
+	}
+
+	return cloudsqlconn.NewDialer(ctx, opts...)
 }

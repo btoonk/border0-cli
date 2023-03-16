@@ -58,7 +58,7 @@ func newMysqlHandler(c Config) (*mysqlHandler, error) {
 		awsCredentials = cfg.Credentials
 	}
 
-	if c.UpstreamTLS {
+	if c.UpstreamTLS && c.DialerFunc == nil {
 		tlsConfig := &tls.Config{}
 
 		if c.UpstreamCAFile != "" {
@@ -114,11 +114,13 @@ func (h mysqlHandler) handleClient(c net.Conn) {
 		h.Password = authenticationToken
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	if h.DialerFunc == nil {
+		h.DialerFunc = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return net.DialTimeout(network, addr, 5*time.Second)
+		}
+	}
 
-	dialer := net.Dialer{}
-	serverConn, err := client.ConnectWithDialer(ctx, "tcp", h.upstreamAddress, h.Username, h.Password, serverHandler.Database, dialer.DialContext, h.options...)
+	serverConn, err := client.ConnectWithDialer(context.Background(), "tcp", h.upstreamAddress, h.Username, h.Password, serverHandler.Database, h.DialerFunc, h.options...)
 	if err != nil {
 		log.Printf("sqlauthproxy: failed to connect upstream: %s", err)
 		return

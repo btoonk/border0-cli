@@ -98,8 +98,11 @@ func (s *Ec2Discover) buildSocket(connectorName string, group config.ConnectorGr
 	socket.ConnectorAuthenticationEnabled = group.ConnectorAuthenticationEnabled
 
 	socket.UpstreamType = socketData.UpstreamType
-	socket.UpstreamUsername = socketData.UpstreamUsername
-	socket.UpstreamPassword = socketData.UpstreamPassword
+
+	socket.ConnectorLocalData = &models.ConnectorLocalData{
+		UpstreamUsername: socketData.UpstreamUsername,
+		UpstreamPassword: socketData.UpstreamPassword,
+	}
 
 	socket.TargetHostname = socketData.Host
 	if socket.TargetHostname == "" || socket.TargetHostname == "<nil>" {
