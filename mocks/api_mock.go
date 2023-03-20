@@ -763,12 +763,13 @@ func (_c *API_Login_Call) RunAndReturn(run func(string, string) (*models.LoginRe
 }
 
 // SignSSHKey provides a mock function with given fields: ctx, socketID, key
-func (_m *API) SignSSHKey(ctx context.Context, socketID string, key []byte) (string, error) {
+func (_m *API) SignSSHKey(ctx context.Context, socketID string, key []byte) (string, string, error) {
 	ret := _m.Called(ctx, socketID, key)
 
 	var r0 string
-	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, []byte) (string, error)); ok {
+	var r1 string
+	var r2 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, []byte) (string, string, error)); ok {
 		return rf(ctx, socketID, key)
 	}
 	if rf, ok := ret.Get(0).(func(context.Context, string, []byte) string); ok {
@@ -777,13 +778,19 @@ func (_m *API) SignSSHKey(ctx context.Context, socketID string, key []byte) (str
 		r0 = ret.Get(0).(string)
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, string, []byte) error); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, string, []byte) string); ok {
 		r1 = rf(ctx, socketID, key)
 	} else {
-		r1 = ret.Error(1)
+		r1 = ret.Get(1).(string)
 	}
 
-	return r0, r1
+	if rf, ok := ret.Get(2).(func(context.Context, string, []byte) error); ok {
+		r2 = rf(ctx, socketID, key)
+	} else {
+		r2 = ret.Error(2)
+	}
+
+	return r0, r1, r2
 }
 
 // API_SignSSHKey_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SignSSHKey'
@@ -806,12 +813,12 @@ func (_c *API_SignSSHKey_Call) Run(run func(ctx context.Context, socketID string
 	return _c
 }
 
-func (_c *API_SignSSHKey_Call) Return(_a0 string, _a1 error) *API_SignSSHKey_Call {
-	_c.Call.Return(_a0, _a1)
+func (_c *API_SignSSHKey_Call) Return(_a0 string, _a1 string, _a2 error) *API_SignSSHKey_Call {
+	_c.Call.Return(_a0, _a1, _a2)
 	return _c
 }
 
-func (_c *API_SignSSHKey_Call) RunAndReturn(run func(context.Context, string, []byte) (string, error)) *API_SignSSHKey_Call {
+func (_c *API_SignSSHKey_Call) RunAndReturn(run func(context.Context, string, []byte) (string, string, error)) *API_SignSSHKey_Call {
 	_c.Call.Return(run)
 	return _c
 }

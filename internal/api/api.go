@@ -41,7 +41,7 @@ type API interface {
 	GetPoliciesBySocketID(socketID string) ([]models.Policy, error)
 	StartRefreshAccessTokenJob(ctx context.Context)
 	GetAccessToken() string
-	SignSSHKey(ctx context.Context, socketID string, key []byte) (string, error)
+	SignSSHKey(ctx context.Context, socketID string, key []byte) (string, string, error)
 	GetUserID() (string, error)
 }
 
@@ -464,7 +464,7 @@ func (a *Border0API) StartRefreshAccessTokenJob(ctx context.Context) {
 	once.Do(onceBody)
 }
 
-func (a *Border0API) SignSSHKey(ctx context.Context, socketID string, key []byte) (string, error) {
+func (a *Border0API) SignSSHKey(ctx context.Context, socketID string, key []byte) (string, string, error) {
 	newCsr := &models.SshCsr{
 		SSHPublicKey: strings.TrimRight(string(key), "\n"),
 	}
@@ -474,14 +474,14 @@ func (a *Border0API) SignSSHKey(ctx context.Context, socketID string, key []byte
 	var cert *models.SshCsr
 	err := a.Request("POST", url, &cert, newCsr, true)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	if cert.SSHSignedCert == "" {
-		return "", fmt.Errorf("error: Unable to get signed key from Server")
+		return "", "", fmt.Errorf("error: Unable to get signed key from Server")
 	}
 
-	return cert.SSHSignedCert, nil
+	return cert.SSHSignedCert, cert.HostKey, nil
 }
 
 func (a *Border0API) GetUserID() (string, error) {

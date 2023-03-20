@@ -9,6 +9,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/base64"
 	"encoding/pem"
 	"fmt"
 	"io"
@@ -30,11 +31,10 @@ import (
 )
 
 const (
-	defaultTunnelHost = "tunnel.border0.com"
-	defaultTunnelPort = 22
-	defaultSSHTimeout = 5 * time.Second
-	tunnelHostEnvVar  = "BORDER0_TUNNEL"
-	// tunnelHostKey                         = "AAAAC3NzaC1lZDI1NTE5AAAAIIyCjIut7ZxhiFj5HEnY8GQP2vSI9DJDcnUzVyUipCgP"
+	defaultTunnelHost                     = "tunnel.border0.com"
+	defaultTunnelPort                     = 22
+	defaultSSHTimeout                     = 5 * time.Second
+	tunnelHostEnvVar                      = "BORDER0_TUNNEL"
 	connectorAuthenticationHeader         = "BORDER0-CLIENT-CONNECTOR-AUTHENTICATED"
 	connectorAuthenticationShutdownTime   = 200 * time.Millisecond
 	connectorAuthenticationCertificateOrg = "Border0 Connector"
@@ -60,6 +60,7 @@ type Socket struct {
 	proxyHost                        *url.URL
 	closed                           bool
 	version                          string
+	hostKey                          ssh.PublicKey
 }
 
 type sshKeyPair struct {
@@ -158,24 +159,10 @@ func (s *Socket) tunnelConnect() {
 		return
 	}
 
-	// keyBytes, err := base64.StdEncoding.DecodeString(tunnelHostKey)
-	// if err != nil {
-	// 	s.errChan <- fmt.Errorf("failed to decode hostkey %v", err)
-	// 	return
-	// }
-
-	// hostKey, err := ssh.ParsePublicKey(keyBytes)
-	// if err != nil {
-	// 	s.errChan <- fmt.Errorf("failed to parse hostkey %v", err)
-	// 	return
-	// }
-
 	sshConfig := &ssh.ClientConfig{
-		User: userID,
-		// HostKeyCallback: ssh.FixedHostKey(hostKey),
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         defaultSSHTimeout,
-		ClientVersion:   "SSH-2.0-Border0-" + s.version,
+		User:          userID,
+		Timeout:       defaultSSHTimeout,
+		ClientVersion: "SSH-2.0-Border0-" + s.version,
 	}
 
 	ebackoff := backoff.NewExponentialBackOff()
@@ -184,14 +171,15 @@ func (s *Socket) tunnelConnect() {
 
 	err = backoff.Retry(func() error {
 		if err := s.refreshSSHCert(); err != nil {
-			fmt.Printf("failed to get ssh cert, retrying (%s)...\n", err)
+			fmt.Printf("failed to refresh tunnel certificate (%s), retrying...\n", err)
 			return err
 		}
 
+		sshConfig.HostKeyCallback = ssh.FixedHostKey(s.hostKey)
 		sshConfig.Auth = []ssh.AuthMethod{ssh.PublicKeys(s.sshSigner)}
 
 		if err = s.sshConnect(sshConfig, ebackoff); err != nil {
-			fmt.Printf("failed to connect to server, retrying (%s)...\n", err)
+			fmt.Printf("failed to connect to server (%s), retrying...\n", err)
 			return err
 		}
 
@@ -326,7 +314,7 @@ func (s *Socket) generateSSHKeyPair() error {
 }
 
 func (s *Socket) refreshSSHCert() error {
-	sshCert, err := s.border0API.SignSSHKey(context.Background(), s.SocketID, s.keyPair.publicKey)
+	sshCert, hostKey, err := s.border0API.SignSSHKey(context.Background(), s.SocketID, s.keyPair.publicKey)
 	if err != nil {
 		return err
 	}
@@ -349,6 +337,15 @@ func (s *Socket) refreshSSHCert() error {
 
 	if s.sshSigner, err = ssh.NewCertSigner(cert, clientKey); err != nil {
 		return fmt.Errorf("failed to create signer: %v", err)
+	}
+
+	hostKeyBytes, err := base64.StdEncoding.DecodeString(hostKey)
+	if err != nil {
+		return fmt.Errorf("failed to decode hostkey %v", err)
+	}
+
+	if s.hostKey, err = ssh.ParsePublicKey(hostKeyBytes); err != nil {
+		return fmt.Errorf("failed to parse hostkey %v", err)
 	}
 
 	return nil

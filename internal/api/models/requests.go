@@ -52,4 +52,5 @@ type SwitchOrgResponse struct {
 type SshCsr struct {
 	SSHPublicKey  string `json:"ssh_public_key"`
 	SSHSignedCert string `json:"signed_ssh_cert,omitempty"`
+	HostKey       string `json:"host_key,omitempty"`
 }
