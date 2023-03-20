@@ -18,6 +18,7 @@ func TestConnectorCore_SocketsCoreHandler(t *testing.T) {
 	socket := factories.SocketFactory.MustCreate().(*models.Socket)
 
 	expectedSocket := *socket
+	expectedSocket.ConnectorLocalData = &models.ConnectorLocalData{}
 	staticSocketPlugins := &discover.StaticSocketFinder{}
 	cfg := validConfig()
 
